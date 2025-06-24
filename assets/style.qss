@@ -1,0 +1,81 @@
+/* assets/style.qss */
+
+/* Estilo geral da aplicação */
+QWidget {
+    background-color: #2E2E2E; /* Um cinza bem escuro */
+    color: #FFFFFF;
+    font-family: Arial, sans-serif;
+}
+
+/* Estilo dos botões principais */
+QPushButton {
+    background-color: #E91E63; /* O rosa do protótipo */
+    color: white;
+    border-radius: 5px;
+    padding: 8px 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #C2185B; /* Um rosa um pouco mais escuro ao passar o mouse */
+}
+
+/* Estilo específico para o botão de Adicionar (+) */
+QPushButton#addButton {
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 25px; /* Deixa ele perfeitamente redondo */
+}
+
+/* Estilo para a lista de notas */
+QListWidget {
+    background-color: #3C3C3C;
+    border-radius: 5px;
+    border: none;
+    padding: 5px;
+}
+
+/* Estilo para cada item da lista */
+QListWidget::item {
+    padding: 10px;
+}
+
+/* Estilo para o item SELECIONADO na lista */
+QListWidget::item:selected {
+    background-color: #E91E63;
+    color: white;
+}
+
+/* Estilo para a área de visualização de texto */
+QTextEdit {
+    background-color: #3C3C3C;
+    border-radius: 5px;
+    border: none;
+    padding: 10px;
+}
+
+/* Estilo para as abas */
+QTabBar::tab {
+    background-color: #2E2E2E;
+    color: white;
+    padding: 10px;
+    font-size: 14px;
+    border: none;
+    border-bottom: 2px solid #2E2E2E; /* Borda inferior da cor do fundo */
+}
+
+QTabBar::tab:hover {
+    background-color: #3C3C3C;
+}
+
+QTabBar::tab:selected {
+    color: #E91E63;
+    font-weight: bold;
+    border-bottom: 2px solid #E91E63; /* Borda rosa na aba selecionada */
+}
+
+QTabWidget::pane {
+  border: none; /* Remove a borda ao redor do conteúdo da aba */
+}
