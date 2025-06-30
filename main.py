@@ -1,4 +1,4 @@
-# main.py (Versão com Sistema de Anexos PDF)
+# main.py (Versão com Sistema de Pastas e Anexos PDF)
 
 import sys
 import os
@@ -9,10 +9,12 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout, QListWidget, QTextEdit,
     QListWidgetItem, QHBoxLayout, QMessageBox,
     QStackedWidget, QLineEdit, QCalendarWidget, QLabel, QInputDialog,
-    QFrame
+    QFrame, QSplitter
 )
 from core.database_manager import DatabaseManager
 from ui.attachment_widget import AttachmentWidget
+from ui.folder_tree_widget import FolderTreeWidget
+from ui.breadcrumb_widget import BreadcrumbWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -38,11 +40,37 @@ class MainWindow(QMainWindow):
         
         # --- Aba "Notas" ---
         widget_da_aba_notas = QWidget()
-        layout_aba_notas = QHBoxLayout(widget_da_aba_notas)
+        layout_aba_notas = QVBoxLayout(widget_da_aba_notas)
+        
+        # Breadcrumb para navegação de pastas
+        self.breadcrumb = BreadcrumbWidget(self.db)
+        layout_aba_notas.addWidget(self.breadcrumb)
+        
+        # Splitter para dividir a árvore de pastas e o conteúdo
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # Painel esquerdo: Árvore de pastas
+        self.folder_tree = FolderTreeWidget(self.db)
+        splitter.addWidget(self.folder_tree)
+        
+        # Painel direito: Lista de notas e visualizador/editor
+        painel_direito = QWidget()
+        layout_painel_direito = QVBoxLayout(painel_direito)
+        layout_painel_direito.setContentsMargins(0, 0, 0, 0)
+        
         self.lista_de_notas = QListWidget()
-        layout_aba_notas.addWidget(self.lista_de_notas, 1)
         self.stacked_widget = QStackedWidget()
-        layout_aba_notas.addWidget(self.stacked_widget, 2)
+        
+        layout_painel_direito.addWidget(self.lista_de_notas, 1)
+        layout_painel_direito.addWidget(self.stacked_widget, 2)
+        
+        splitter.addWidget(painel_direito)
+        
+        # Define as proporções iniciais do splitter (30% para a árvore, 70% para o conteúdo)
+        splitter.setSizes([300, 700])
+        
+        layout_aba_notas.addWidget(splitter)
+        
         self._criar_paginas_stacked_widget()
         self.abas.addTab(widget_da_aba_notas, "Notas")
         
@@ -89,13 +117,21 @@ class MainWindow(QMainWindow):
         self.botao_salvar.clicked.connect(self.salvar_nota)
         self.botao_cancelar.clicked.connect(self.sair_modo_edicao)
         
+        # Conexões para o sistema de pastas
+        self.folder_tree.folder_selected.connect(self.carregar_notas_da_pasta)
+        self.folder_tree.note_moved.connect(self.atualizar_apos_mover_nota)
+        self.breadcrumb.folder_selected.connect(self.selecionar_pasta)
+        
         self.calendario.selectionChanged.connect(self.atualizar_lista_de_eventos)
         self.lista_de_eventos.currentItemChanged.connect(self.atualizar_estado_botao_delete_evento)
         self.botao_add_evento.clicked.connect(self.adicionar_novo_evento)
         self.botao_delete_evento.clicked.connect(self.deletar_evento_selecionado)
         
         # --- Carregamento Inicial ---
-        self.carregar_notas()
+        # Seleciona a pasta 'Geral' por padrão
+        self.pasta_atual_id = self.obter_pasta_geral_id()
+        self.breadcrumb.set_folder(self.pasta_atual_id)
+        self.carregar_notas_da_pasta(self.pasta_atual_id)
         self.stacked_widget.setCurrentIndex(0)
         self.destacar_datas_com_eventos()
         self.atualizar_lista_de_eventos()
@@ -150,14 +186,40 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(pagina_visualizacao)
         self.stacked_widget.addWidget(pagina_edicao)
 
+    # --- MÉTODOS DE PASTAS ---
+    def obter_pasta_geral_id(self):
+        """Obtém o ID da pasta 'Geral'."""
+        self.db.cursor.execute(
+            "SELECT id FROM folders WHERE name = 'Geral' AND parent_id IS NULL"
+        )
+        result = self.db.cursor.fetchone()
+        return result[0] if result else None
+    
+    def selecionar_pasta(self, folder_id):
+        """Seleciona uma pasta específica na árvore e carrega suas notas."""
+        self.pasta_atual_id = folder_id
+        self.breadcrumb.set_folder(folder_id)
+        self.folder_tree.get_current_folder_id()
+        self.carregar_notas_da_pasta(folder_id)
+    
+    def atualizar_apos_mover_nota(self, note_id, folder_id):
+        """Atualiza a interface após mover uma nota para outra pasta."""
+        # Recarrega as notas da pasta atual
+        self.carregar_notas_da_pasta(self.pasta_atual_id)
+    
     # --- MÉTODOS DE NOTAS ---
-    def carregar_notas(self):
+    def carregar_notas_da_pasta(self, folder_id):
+        """Carrega as notas da pasta especificada."""
+        self.pasta_atual_id = folder_id
+        self.breadcrumb.set_folder(folder_id)
+        
         self.lista_de_notas.clear()
         self.conteudo_viewer.clear()
         self.botao_delete.setVisible(False)
-        notas = self.db.get_all_notes()
+        
+        notas = self.db.get_notes_in_folder(folder_id)
         for nota in notas:
-            id_nota, titulo, conteudo = nota
+            id_nota, titulo, conteudo = nota[:3]  # Pega apenas os primeiros 3 campos
             item = QListWidgetItem(titulo)
             item.setData(Qt.ItemDataRole.UserRole, id_nota)
             self.lista_de_notas.addItem(item)
@@ -212,7 +274,8 @@ class MainWindow(QMainWindow):
             return
 
         if self.id_nota_em_edicao is None:
-            novo_id = self.db.add_note(titulo, conteudo)
+            # Adiciona a nota na pasta atual
+            novo_id = self.db.add_note(titulo, conteudo, self.pasta_atual_id)
             if novo_id:
                 self.id_nota_em_edicao = novo_id
                 # Atualiza o widget de anexos com o novo ID da nota
@@ -220,7 +283,7 @@ class MainWindow(QMainWindow):
         else:
             self.db.update_note(self.id_nota_em_edicao, titulo, conteudo)
         
-        self.carregar_notas()
+        self.carregar_notas_da_pasta(self.pasta_atual_id)
         self.sair_modo_edicao()
     
     def deletar_nota_selecionada(self):
@@ -238,7 +301,9 @@ class MainWindow(QMainWindow):
         if caixa_confirmacao.exec() == QMessageBox.StandardButton.Yes:
             id_da_nota = item_selecionado.data(Qt.ItemDataRole.UserRole)
             self.db.delete_note(id_da_nota)
-            self.carregar_notas()
+            self.carregar_notas_da_pasta(self.pasta_atual_id)
+            # Atualiza o contador de notas na árvore de pastas
+            self.folder_tree.refresh()
 
     # --- MÉTODOS DO CALENDÁRIO ---
     def destacar_datas_com_eventos(self):

@@ -20,6 +20,7 @@ O PinkNote é uma aplicação de desktop desenvolvida em Python com o objetivo d
     * ✏️ **Editar:** Edite notas existentes diretamente na tela principal, sem a necessidade de pop-ups.
     * 🗑️ **Deletar:** Remova anotações com uma caixa de diálogo de confirmação para evitar acidentes.
     * 📎 **Anexos PDF:** Adicione, visualize e gerencie arquivos PDF anexados às suas notas.
+    * 📁 **Sistema de Pastas:** Organize suas notas em uma estrutura hierárquica de pastas e subpastas.
 
 * **Calendário de Eventos:**
     * 📅 **Visualização:** Navegue por um calendário completo.
@@ -31,6 +32,9 @@ O PinkNote é uma aplicação de desktop desenvolvida em Python com o objetivo d
     * 🎨 **Tema Customizado:** Interface com tema escuro e detalhes em rosa, inspirada no protótipo inicial.
     * 🖥️ **Edição Integrada:** O modo de edição de notas acontece na mesma janela, proporcionando um fluxo de trabalho mais rápido e moderno.
     * 👆 **Controles Contextuais:** Botões como "Deletar Nota" e "Deletar Evento" aparecem de forma inteligente apenas quando um item é selecionado.
+    * 🌳 **Navegação em Árvore:** Visualize e navegue pela estrutura de pastas em uma árvore interativa.
+    * 🧭 **Breadcrumb Navigation:** Acompanhe e navegue facilmente pelo caminho da pasta atual.
+    * 🖱️ **Drag-and-Drop:** Mova notas e pastas facilmente arrastando e soltando.
 
 ---
 
@@ -91,7 +95,15 @@ caderno-digital/
 ├── README.md           # Documentação do projeto
 ├── main.py             # Ponto de entrada e lógica principal da interface
 ├── core/
-│   └── database_manager.py # Camada de acesso a dados (gerencia o SQLite)
+│   ├── database_manager.py # Camada de acesso a dados (gerencia o SQLite)
+│   ├── folder_manager.py   # Gerenciamento da estrutura hierárquica de pastas
+│   └── folder_migration.py # Script de migração para o sistema de pastas
+├── ui/
+│   ├── attachment_widget.py # Widget para gerenciamento de anexos
+│   ├── breadcrumb_widget.py # Widget de navegação em breadcrumb
+│   ├── folder_tree_widget.py # Widget de árvore de pastas
+│   └── note_editor.py       # Editor de notas
+├── attachments/         # Diretório para armazenar arquivos PDF anexados
 └── assets/
     └── style.qss       # Folha de estilos da aplicação
 ```

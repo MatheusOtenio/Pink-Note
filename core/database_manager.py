@@ -1,15 +1,23 @@
-# core/database_manager.py (Versão com Sistema de Anexos PDF)
+# core/database_manager.py (Versão com Sistema de Pastas Hierárquicas)
 import sqlite3
 import os
 import shutil
 import uuid
 from PySide6.QtCore import QDate
+from core.folder_manager import FolderManager
+from core.folder_migration import migrate_database
 
 class DatabaseManager:
     def __init__(self, db_file="pinknote.db"):
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
         self._setup_tables()
+        
+        # Executa a migração para o sistema de pastas, se necessário
+        migrate_database(db_file)
+        
+        # Inicializa o gerenciador de pastas
+        self.folder_manager = FolderManager(self.conn, self.cursor)
 
     def _setup_tables(self):
         # Tabela de notas
@@ -46,20 +54,48 @@ class DatabaseManager:
         self.conn.commit()
         print("Banco de dados e tabelas configurados com sucesso.")
 
-    # --- MÉTODOS DE NOTAS (sem mudanças) ---
-    # ... (todos os seus métodos de notas continuam aqui) ...
-    def get_all_notes(self):
-        self.cursor.execute("SELECT id, title, content FROM notes ORDER BY modified_at DESC")
+    # --- MÉTODOS DE NOTAS ---
+    def get_all_notes(self, folder_id=None):
+        """
+        Retorna todas as notas, opcionalmente filtradas por pasta.
+        
+        Args:
+            folder_id (int, optional): ID da pasta para filtrar. Se None, retorna todas as notas.
+            
+        Returns:
+            list: Lista de tuplas (id, title, content) das notas
+        """
+        if folder_id is None:
+            self.cursor.execute("SELECT id, title, content FROM notes ORDER BY modified_at DESC")
+        else:
+            self.cursor.execute(
+                "SELECT id, title, content FROM notes WHERE folder_id = ? ORDER BY modified_at DESC",
+                (folder_id,)
+            )
         return self.cursor.fetchall()
     def get_note_by_id(self, note_id):
         self.cursor.execute("SELECT * FROM notes WHERE id = ?", (note_id,))
         return self.cursor.fetchone()
-    def add_note(self, title, content):
+    def add_note(self, title, content, folder_id=None):
         try:
-            self.cursor.execute("INSERT INTO notes (title, content, category) VALUES (?, ?, ?)",(title, content, "Geral"))
+            # Se folder_id não for especificado, usa a pasta 'Geral'
+            if folder_id is None:
+                self.cursor.execute(
+                    "SELECT id FROM folders WHERE name = 'Geral' AND parent_id IS NULL"
+                )
+                result = self.cursor.fetchone()
+                if result:
+                    folder_id = result[0]
+            
+            self.cursor.execute(
+                "INSERT INTO notes (title, content, category, folder_id) VALUES (?, ?, ?, ?)",
+                (title, content, "Geral", folder_id)
+            )
             self.conn.commit()
             return self.cursor.lastrowid
-        except sqlite3.Error as e: print(f"Erro ao adicionar nota: {e}"); return None
+        except sqlite3.Error as e: 
+            print(f"Erro ao adicionar nota: {e}")
+            return None
     def update_note(self, note_id, title, content):
         try:
             self.cursor.execute("UPDATE notes SET title = ?, content = ?, modified_at = CURRENT_TIMESTAMP WHERE id = ?",(title, content, note_id))
@@ -182,6 +218,141 @@ class DatabaseManager:
         self.cursor.execute("SELECT file_path FROM attachments WHERE id = ?", (attachment_id,))
         result = self.cursor.fetchone()
         return result[0] if result else None
+    
+    # --- MÉTODOS PARA PASTAS ---
+    
+    def get_all_folders(self):
+        """
+        Retorna todas as pastas ordenadas hierarquicamente.
+        
+        Returns:
+            list: Lista de tuplas (id, name, parent_id, path)
+        """
+        return self.folder_manager.get_all_folders()
+    
+    def get_folder_by_id(self, folder_id):
+        """
+        Retorna uma pasta específica pelo seu ID.
+        
+        Args:
+            folder_id (int): ID da pasta
+            
+        Returns:
+            tuple: (id, name, parent_id, path) ou None se não encontrada
+        """
+        return self.folder_manager.get_folder_by_id(folder_id)
+    
+    def get_subfolders(self, parent_id=None):
+        """
+        Retorna todas as subpastas de uma pasta específica.
+        
+        Args:
+            parent_id (int, optional): ID da pasta pai. Se None, retorna pastas de nível raiz.
+            
+        Returns:
+            list: Lista de tuplas (id, name, parent_id, path)
+        """
+        return self.folder_manager.get_subfolders(parent_id)
+    
+    def create_folder(self, name, parent_id=None):
+        """
+        Cria uma nova pasta.
+        
+        Args:
+            name (str): Nome da pasta
+            parent_id (int, optional): ID da pasta pai. Se None, cria no nível raiz.
+            
+        Returns:
+            int: ID da pasta criada ou None em caso de erro
+        """
+        return self.folder_manager.create_folder(name, parent_id)
+    
+    def rename_folder(self, folder_id, new_name):
+        """
+        Renomeia uma pasta.
+        
+        Args:
+            folder_id (int): ID da pasta a ser renomeada
+            new_name (str): Novo nome para a pasta
+            
+        Returns:
+            bool: True se bem-sucedido, False caso contrário
+        """
+        return self.folder_manager.rename_folder(folder_id, new_name)
+    
+    def delete_folder(self, folder_id):
+        """
+        Exclui uma pasta e move suas notas para a pasta 'Geral'.
+        
+        Args:
+            folder_id (int): ID da pasta a ser excluída
+            
+        Returns:
+            bool: True se bem-sucedido, False caso contrário
+        """
+        return self.folder_manager.delete_folder(folder_id)
+    
+    def move_folder(self, folder_id, new_parent_id=None):
+        """
+        Move uma pasta para outro local na hierarquia.
+        
+        Args:
+            folder_id (int): ID da pasta a ser movida
+            new_parent_id (int, optional): ID da nova pasta pai. Se None, move para o nível raiz.
+            
+        Returns:
+            bool: True se bem-sucedido, False caso contrário
+        """
+        return self.folder_manager.move_folder(folder_id, new_parent_id)
+    
+    def move_note(self, note_id, folder_id):
+        """
+        Move uma nota para outra pasta.
+        
+        Args:
+            note_id (int): ID da nota a ser movida
+            folder_id (int): ID da pasta de destino
+            
+        Returns:
+            bool: True se bem-sucedido, False caso contrário
+        """
+        return self.folder_manager.move_note(note_id, folder_id)
+    
+    def get_notes_in_folder(self, folder_id):
+        """
+        Retorna todas as notas em uma pasta específica.
+        
+        Args:
+            folder_id (int): ID da pasta
+            
+        Returns:
+            list: Lista de tuplas (id, title, content) das notas na pasta
+        """
+        return self.folder_manager.get_notes_in_folder(folder_id)
+    
+    def get_folder_note_count(self, folder_id):
+        """
+        Retorna o número de notas em uma pasta específica.
+        
+        Args:
+            folder_id (int): ID da pasta
+            
+        Returns:
+            int: Número de notas na pasta
+        """
+        return self.folder_manager.get_folder_note_count(folder_id)
+    
+    def search_notes_across_folders(self, search_term):
+        """
+        Pesquisa notas em todas as pastas que contenham o termo de pesquisa no título ou conteúdo.
+        
+        Args:
+            search_term (str): Termo a ser pesquisado
+            
+        Returns:
+            list: Lista de tuplas (id, title, content, folder_id, folder_name) das notas encontradas
+        """
+        return self.folder_manager.search_notes_across_folders(search_term)
     
     def close(self):
         if self.conn:
