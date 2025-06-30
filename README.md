@@ -19,6 +19,7 @@ O PinkNote é uma aplicação de desktop desenvolvida em Python com o objetivo d
     * 👀 **Ler:** Visualize o conteúdo de qualquer nota selecionada.
     * ✏️ **Editar:** Edite notas existentes diretamente na tela principal, sem a necessidade de pop-ups.
     * 🗑️ **Deletar:** Remova anotações com uma caixa de diálogo de confirmação para evitar acidentes.
+    * 📎 **Anexos PDF:** Adicione, visualize e gerencie arquivos PDF anexados às suas notas.
 
 * **Calendário de Eventos:**
     * 📅 **Visualização:** Navegue por um calendário completo.

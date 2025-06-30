@@ -1,15 +1,18 @@
-# main.py (Versão Completa com Deleção de Eventos - 23 de Junho de 2025)
+# main.py (Versão com Sistema de Anexos PDF)
 
 import sys
+import os
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QFont, QTextCharFormat, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget,
     QPushButton, QVBoxLayout, QListWidget, QTextEdit,
     QListWidgetItem, QHBoxLayout, QMessageBox,
-    QStackedWidget, QLineEdit, QCalendarWidget, QLabel, QInputDialog
+    QStackedWidget, QLineEdit, QCalendarWidget, QLabel, QInputDialog,
+    QFrame
 )
 from core.database_manager import DatabaseManager
+from ui.attachment_widget import AttachmentWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -98,19 +101,38 @@ class MainWindow(QMainWindow):
         self.atualizar_lista_de_eventos()
 
     def _criar_paginas_stacked_widget(self):
+        # Página de visualização
         pagina_visualizacao = QWidget()
         layout_visualizacao = QVBoxLayout(pagina_visualizacao)
         self.conteudo_viewer = QTextEdit()
         self.conteudo_viewer.setReadOnly(True)
-        layout_visualizacao.addWidget(self.conteudo_viewer)
         
+        # Separador entre o conteúdo e os anexos (visualização)
+        separador_view = QFrame()
+        separador_view.setFrameShape(QFrame.Shape.HLine)
+        separador_view.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        # Widget de anexos para visualização
+        self.attachment_viewer = AttachmentWidget(self.db, read_only=True)
+        
+        layout_visualizacao.addWidget(self.conteudo_viewer)
+        layout_visualizacao.addWidget(separador_view)
+        layout_visualizacao.addWidget(self.attachment_viewer)
+        
+        # Página de edição
         pagina_edicao = QWidget()
         layout_edicao = QVBoxLayout(pagina_edicao)
         self.editor_titulo = QLineEdit()
         self.editor_titulo.setPlaceholderText("Título...")
         self.editor_conteudo = QTextEdit()
-        layout_edicao.addWidget(self.editor_titulo)
-        layout_edicao.addWidget(self.editor_conteudo)
+        
+        # Separador entre o conteúdo e os anexos (edição)
+        separador_edit = QFrame()
+        separador_edit.setFrameShape(QFrame.Shape.HLine)
+        separador_edit.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        # Widget de anexos para edição
+        self.attachment_editor = AttachmentWidget(self.db)
         
         botoes_edicao_layout = QHBoxLayout()
         self.botao_salvar = QPushButton("Salvar")
@@ -118,6 +140,11 @@ class MainWindow(QMainWindow):
         botoes_edicao_layout.addStretch()
         botoes_edicao_layout.addWidget(self.botao_cancelar)
         botoes_edicao_layout.addWidget(self.botao_salvar)
+        
+        layout_edicao.addWidget(self.editor_titulo)
+        layout_edicao.addWidget(self.editor_conteudo)
+        layout_edicao.addWidget(separador_edit)
+        layout_edicao.addWidget(self.attachment_editor)
         layout_edicao.addLayout(botoes_edicao_layout)
         
         self.stacked_widget.addWidget(pagina_visualizacao)
@@ -148,15 +175,20 @@ class MainWindow(QMainWindow):
                 titulo, conteudo = nota[1], nota[2]
                 conteudo_html = conteudo.replace('\n', '<br>') if conteudo else ""
                 self.conteudo_viewer.setHtml(f"<h2>{titulo}</h2>{conteudo_html}")
+                
+                # Atualiza o widget de anexos com o ID da nota atual
+                self.attachment_viewer.set_note_id(id_nota)
         else:
             self.botao_delete.setVisible(False)
             self.conteudo_viewer.clear()
+            self.attachment_viewer.set_note_id(None)
 
     def entrar_modo_criacao(self):
         self.id_nota_em_edicao = None
         self.stacked_widget.setCurrentIndex(1)
         self.editor_titulo.clear()
         self.editor_conteudo.clear()
+        self.attachment_editor.set_note_id(None)
         self.editor_titulo.setFocus()
 
     def entrar_modo_edicao(self, item):
@@ -167,6 +199,7 @@ class MainWindow(QMainWindow):
             self.stacked_widget.setCurrentIndex(1)
             self.editor_titulo.setText(nota[1])
             self.editor_conteudo.setText(nota[2])
+            self.attachment_editor.set_note_id(id_nota)
 
     def sair_modo_edicao(self):
         self.stacked_widget.setCurrentIndex(0)
@@ -179,7 +212,11 @@ class MainWindow(QMainWindow):
             return
 
         if self.id_nota_em_edicao is None:
-            self.db.add_note(titulo, conteudo)
+            novo_id = self.db.add_note(titulo, conteudo)
+            if novo_id:
+                self.id_nota_em_edicao = novo_id
+                # Atualiza o widget de anexos com o novo ID da nota
+                self.attachment_editor.set_note_id(novo_id)
         else:
             self.db.update_note(self.id_nota_em_edicao, titulo, conteudo)
         

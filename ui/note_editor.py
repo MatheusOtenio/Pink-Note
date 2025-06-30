@@ -1,7 +1,9 @@
-# ui/note_editor.py (Versão para Adicionar e Editar)
+# ui/note_editor.py (Versão com Suporte a Anexos PDF)
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QLineEdit, QTextEdit, QPushButton, QHBoxLayout
+    QDialog, QVBoxLayout, QLineEdit, QTextEdit, QPushButton, QHBoxLayout,
+    QLabel, QFrame
 )
+from ui.attachment_widget import AttachmentWidget
 
 class NoteEditorWindow(QDialog):
     def __init__(self, db_manager, note_id=None):
@@ -10,18 +12,32 @@ class NoteEditorWindow(QDialog):
         self.db = db_manager
         self.note_id = note_id # Armazena o ID da nota (será None se for uma nota nova)
 
-        # --- Layout e Widgets (continua igual) ---
+        # --- Layout e Widgets ---
         layout = QVBoxLayout(self)
         self.titulo_input = QLineEdit()
         self.conteudo_input = QTextEdit()
+        
+        # Separador entre o conteúdo e os anexos
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        
+        # Widget de anexos
+        self.attachment_widget = AttachmentWidget(self.db, self.note_id)
+        
+        # Layout de botões
         botoes_layout = QHBoxLayout()
         self.botao_cancelar = QPushButton("Cancelar")
         self.botao_salvar = QPushButton("Salvar")
 
         botoes_layout.addWidget(self.botao_cancelar)
         botoes_layout.addWidget(self.botao_salvar)
+        
+        # Adiciona widgets ao layout principal
         layout.addWidget(self.titulo_input)
         layout.addWidget(self.conteudo_input)
+        layout.addWidget(separator)
+        layout.addWidget(self.attachment_widget)
         layout.addLayout(botoes_layout)
 
         # --- Lógica de Edição vs. Criação ---
@@ -55,7 +71,11 @@ class NoteEditorWindow(QDialog):
         if titulo:
             if self.note_id is None:
                 # Se não tem ID, é uma nota nova
-                self.db.add_note(titulo, conteudo)
+                novo_id = self.db.add_note(titulo, conteudo)
+                if novo_id:
+                    self.note_id = novo_id
+                    # Atualiza o widget de anexos com o novo ID da nota
+                    self.attachment_widget.set_note_id(self.note_id)
             else:
                 # Se tem ID, é uma atualização
                 self.db.update_note(self.note_id, titulo, conteudo)

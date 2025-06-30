@@ -8,3 +8,6 @@ __pycache__/
 # Banco de Dados SQLite
 *.db
 *.db-journal
+
+# Diretório de anexos
+attachments/

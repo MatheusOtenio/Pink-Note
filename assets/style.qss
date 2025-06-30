@@ -7,6 +7,15 @@ QWidget {
     font-family: Arial, sans-serif;
 }
 
+/* Estilo para o título da seção de anexos */
+QLabel#attachmentTitle {
+    font-weight: bold;
+    font-size: 14px;
+    color: #E91E63;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
 /* Estilo dos botões principais */
 QPushButton {
     background-color: #E91E63; /* O rosa do protótipo */
