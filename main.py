@@ -1,384 +1,68 @@
-# main.py (Versão com Sistema de Pastas e Anexos PDF)
-
 import sys
 import os
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QFont, QTextCharFormat, QColor
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QWidget,
-    QPushButton, QVBoxLayout, QListWidget, QTextEdit,
-    QListWidgetItem, QHBoxLayout, QMessageBox,
-    QStackedWidget, QLineEdit, QCalendarWidget, QLabel, QInputDialog,
-    QFrame, QSplitter
-)
-from core.database_manager import DatabaseManager
-from ui.attachment_widget import AttachmentWidget
-from ui.folder_tree_widget import FolderTreeWidget
-from ui.breadcrumb_widget import BreadcrumbWidget
+import traceback
+from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtCore import Qt, QFile, QTextStream
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        
-        self.db = DatabaseManager()
-        self.id_nota_em_edicao = None
+from presentation.main_window import MainWindow
+from shared.utils.logger import Logger
+from shared.constants import APP_NAME, APP_VERSION
 
-        if not self.db.get_all_notes() and not self.db.get_all_event_dates():
-            self.db.add_note("Bem-vindo ao PinkNote!", "Clique duplo nesta nota para editá-la.")
-            self.db.add_event(QDate.currentDate().addDays(1).toString("yyyy-MM-dd"), "Entregar projeto!")
+# Set up high DPI scaling
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-        self.setWindowTitle("PinkNote Desktop")
-        self.resize(800, 600)
-        self.setMinimumSize(700, 500)
-
-        # --- Estrutura Principal ---
-        container_principal = QWidget()
-        self.setCentralWidget(container_principal)
-        layout_principal = QVBoxLayout(container_principal)
-
-        self.abas = QTabWidget()
-        
-        # --- Aba "Notas" ---
-        widget_da_aba_notas = QWidget()
-        layout_aba_notas = QVBoxLayout(widget_da_aba_notas)
-        
-        # Breadcrumb para navegação de pastas
-        self.breadcrumb = BreadcrumbWidget(self.db)
-        layout_aba_notas.addWidget(self.breadcrumb)
-        
-        # Splitter para dividir a árvore de pastas e o conteúdo
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # Painel esquerdo: Árvore de pastas
-        self.folder_tree = FolderTreeWidget(self.db)
-        splitter.addWidget(self.folder_tree)
-        
-        # Painel direito: Lista de notas e visualizador/editor
-        painel_direito = QWidget()
-        layout_painel_direito = QVBoxLayout(painel_direito)
-        layout_painel_direito.setContentsMargins(0, 0, 0, 0)
-        
-        self.lista_de_notas = QListWidget()
-        self.stacked_widget = QStackedWidget()
-        
-        layout_painel_direito.addWidget(self.lista_de_notas, 1)
-        layout_painel_direito.addWidget(self.stacked_widget, 2)
-        
-        splitter.addWidget(painel_direito)
-        
-        # Define as proporções iniciais do splitter (30% para a árvore, 70% para o conteúdo)
-        splitter.setSizes([300, 700])
-        
-        layout_aba_notas.addWidget(splitter)
-        
-        self._criar_paginas_stacked_widget()
-        self.abas.addTab(widget_da_aba_notas, "Notas")
-        
-        # --- Aba "Calendário" ---
-        widget_da_aba_calendario = QWidget()
-        layout_aba_calendario = QVBoxLayout(widget_da_aba_calendario)
-        self.calendario = QCalendarWidget()
-        self.calendario.setVerticalHeaderFormat(QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader)
-        layout_aba_calendario.addWidget(self.calendario)
-        layout_aba_calendario.addWidget(QLabel("Eventos para a data selecionada:"))
-        self.lista_de_eventos = QListWidget()
-        self.lista_de_eventos.setMaximumHeight(150)
-        layout_aba_calendario.addWidget(self.lista_de_eventos)
-        
-        botoes_calendario_layout = QHBoxLayout()
-        botoes_calendario_layout.addStretch()
-        self.botao_delete_evento = QPushButton("Deletar Evento")
-        self.botao_delete_evento.setVisible(False)
-        botoes_calendario_layout.addWidget(self.botao_delete_evento)
-        self.botao_add_evento = QPushButton("Adicionar Evento")
-        botoes_calendario_layout.addWidget(self.botao_add_evento)
-        layout_aba_calendario.addLayout(botoes_calendario_layout)
-        
-        self.abas.addTab(widget_da_aba_calendario, "Calendário")
-
-        layout_principal.addWidget(self.abas)
-        
-        # --- Botões de Ação Globais (para Notas) ---
-        layout_botoes_acao = QHBoxLayout()
-        layout_botoes_acao.addStretch()
-        self.botao_delete = QPushButton("Deletar Nota")
-        self.botao_delete.setVisible(False)
-        layout_botoes_acao.addWidget(self.botao_delete)
-        self.botao_add = QPushButton("+")
-        self.botao_add.setObjectName("addButton")
-        layout_botoes_acao.addWidget(self.botao_add)
-        layout_principal.addLayout(layout_botoes_acao)
-
-        # --- Conexões de Sinais ---
-        self.lista_de_notas.currentItemChanged.connect(self.display_note_content)
-        self.lista_de_notas.itemDoubleClicked.connect(self.entrar_modo_edicao)
-        self.botao_add.clicked.connect(self.entrar_modo_criacao)
-        self.botao_delete.clicked.connect(self.deletar_nota_selecionada)
-        self.botao_salvar.clicked.connect(self.salvar_nota)
-        self.botao_cancelar.clicked.connect(self.sair_modo_edicao)
-        
-        # Conexões para o sistema de pastas
-        self.folder_tree.folder_selected.connect(self.carregar_notas_da_pasta)
-        self.folder_tree.note_moved.connect(self.atualizar_apos_mover_nota)
-        self.breadcrumb.folder_selected.connect(self.selecionar_pasta)
-        
-        self.calendario.selectionChanged.connect(self.atualizar_lista_de_eventos)
-        self.lista_de_eventos.currentItemChanged.connect(self.atualizar_estado_botao_delete_evento)
-        self.botao_add_evento.clicked.connect(self.adicionar_novo_evento)
-        self.botao_delete_evento.clicked.connect(self.deletar_evento_selecionado)
-        
-        # --- Carregamento Inicial ---
-        # Seleciona a pasta 'Geral' por padrão
-        self.pasta_atual_id = self.obter_pasta_geral_id()
-        self.breadcrumb.set_folder(self.pasta_atual_id)
-        self.carregar_notas_da_pasta(self.pasta_atual_id)
-        self.stacked_widget.setCurrentIndex(0)
-        self.destacar_datas_com_eventos()
-        self.atualizar_lista_de_eventos()
-
-    def _criar_paginas_stacked_widget(self):
-        # Página de visualização
-        pagina_visualizacao = QWidget()
-        layout_visualizacao = QVBoxLayout(pagina_visualizacao)
-        self.conteudo_viewer = QTextEdit()
-        self.conteudo_viewer.setReadOnly(True)
-        
-        # Separador entre o conteúdo e os anexos (visualização)
-        separador_view = QFrame()
-        separador_view.setFrameShape(QFrame.Shape.HLine)
-        separador_view.setFrameShadow(QFrame.Shadow.Sunken)
-        
-        # Widget de anexos para visualização
-        self.attachment_viewer = AttachmentWidget(self.db, read_only=True)
-        
-        layout_visualizacao.addWidget(self.conteudo_viewer)
-        layout_visualizacao.addWidget(separador_view)
-        layout_visualizacao.addWidget(self.attachment_viewer)
-        
-        # Página de edição
-        pagina_edicao = QWidget()
-        layout_edicao = QVBoxLayout(pagina_edicao)
-        self.editor_titulo = QLineEdit()
-        self.editor_titulo.setPlaceholderText("Título...")
-        self.editor_conteudo = QTextEdit()
-        
-        # Separador entre o conteúdo e os anexos (edição)
-        separador_edit = QFrame()
-        separador_edit.setFrameShape(QFrame.Shape.HLine)
-        separador_edit.setFrameShadow(QFrame.Shadow.Sunken)
-        
-        # Widget de anexos para edição
-        self.attachment_editor = AttachmentWidget(self.db)
-        
-        botoes_edicao_layout = QHBoxLayout()
-        self.botao_salvar = QPushButton("Salvar")
-        self.botao_cancelar = QPushButton("Cancelar")
-        botoes_edicao_layout.addStretch()
-        botoes_edicao_layout.addWidget(self.botao_cancelar)
-        botoes_edicao_layout.addWidget(self.botao_salvar)
-        
-        layout_edicao.addWidget(self.editor_titulo)
-        layout_edicao.addWidget(self.editor_conteudo)
-        layout_edicao.addWidget(separador_edit)
-        layout_edicao.addWidget(self.attachment_editor)
-        layout_edicao.addLayout(botoes_edicao_layout)
-        
-        self.stacked_widget.addWidget(pagina_visualizacao)
-        self.stacked_widget.addWidget(pagina_edicao)
-
-    # --- MÉTODOS DE PASTAS ---
-    def obter_pasta_geral_id(self):
-        """Obtém o ID da pasta 'Geral'."""
-        self.db.cursor.execute(
-            "SELECT id FROM folders WHERE name = 'Geral' AND parent_id IS NULL"
-        )
-        result = self.db.cursor.fetchone()
-        return result[0] if result else None
+def exception_hook(exc_type, exc_value, exc_traceback):
+    """Custom exception hook to log unhandled exceptions.
     
-    def selecionar_pasta(self, folder_id):
-        """Seleciona uma pasta específica na árvore e carrega suas notas."""
-        self.pasta_atual_id = folder_id
-        self.breadcrumb.set_folder(folder_id)
-        self.folder_tree.get_current_folder_id()
-        self.carregar_notas_da_pasta(folder_id)
+    Args:
+        exc_type: Exception type
+        exc_value: Exception value
+        exc_traceback: Exception traceback
+    """
+    # Log the exception
+    logger = Logger.get_instance()
+    logger.error(f"Unhandled exception: {exc_value}\n{''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))}")
     
-    def atualizar_apos_mover_nota(self, note_id, folder_id):
-        """Atualiza a interface após mover uma nota para outra pasta."""
-        # Recarrega as notas da pasta atual
-        self.carregar_notas_da_pasta(self.pasta_atual_id)
+    # Format the traceback
+    tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+    tb_text = ''.join(tb_lines)
     
-    # --- MÉTODOS DE NOTAS ---
-    def carregar_notas_da_pasta(self, folder_id):
-        """Carrega as notas da pasta especificada."""
-        self.pasta_atual_id = folder_id
-        self.breadcrumb.set_folder(folder_id)
-        
-        self.lista_de_notas.clear()
-        self.conteudo_viewer.clear()
-        self.botao_delete.setVisible(False)
-        
-        notas = self.db.get_notes_in_folder(folder_id)
-        for nota in notas:
-            id_nota, titulo, conteudo = nota[:3]  # Pega apenas os primeiros 3 campos
-            item = QListWidgetItem(titulo)
-            item.setData(Qt.ItemDataRole.UserRole, id_nota)
-            self.lista_de_notas.addItem(item)
+    # Show error message
+    QMessageBox.critical(
+        None,
+        "Application Error",
+        f"An unexpected error occurred:\n\n{exc_value}\n\n"
+        f"Please report this error with the following information:\n\n{tb_text}"
+    )
     
-    def display_note_content(self, current_item, previous_item=None):
-        if self.stacked_widget.currentIndex() == 1:
-            return
-            
-        item_para_exibir = current_item if current_item else self.lista_de_notas.currentItem()
-        if item_para_exibir:
-            self.botao_delete.setVisible(True)
-            id_nota = item_para_exibir.data(Qt.ItemDataRole.UserRole)
-            nota = self.db.get_note_by_id(id_nota)
-            if nota:
-                titulo, conteudo = nota[1], nota[2]
-                conteudo_html = conteudo.replace('\n', '<br>') if conteudo else ""
-                self.conteudo_viewer.setHtml(f"<h2>{titulo}</h2>{conteudo_html}")
-                
-                # Atualiza o widget de anexos com o ID da nota atual
-                self.attachment_viewer.set_note_id(id_nota)
-        else:
-            self.botao_delete.setVisible(False)
-            self.conteudo_viewer.clear()
-            self.attachment_viewer.set_note_id(None)
+    # Call the original exception hook
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
-    def entrar_modo_criacao(self):
-        self.id_nota_em_edicao = None
-        self.stacked_widget.setCurrentIndex(1)
-        self.editor_titulo.clear()
-        self.editor_conteudo.clear()
-        self.attachment_editor.set_note_id(None)
-        self.editor_titulo.setFocus()
-
-    def entrar_modo_edicao(self, item):
-        id_nota = item.data(Qt.ItemDataRole.UserRole)
-        nota = self.db.get_note_by_id(id_nota)
-        if nota:
-            self.id_nota_em_edicao = id_nota
-            self.stacked_widget.setCurrentIndex(1)
-            self.editor_titulo.setText(nota[1])
-            self.editor_conteudo.setText(nota[2])
-            self.attachment_editor.set_note_id(id_nota)
-
-    def sair_modo_edicao(self):
-        self.stacked_widget.setCurrentIndex(0)
-        self.display_note_content(self.lista_de_notas.currentItem())
-
-    def salvar_nota(self):
-        titulo = self.editor_titulo.text()
-        conteudo = self.editor_conteudo.toPlainText()
-        if not titulo:
-            return
-
-        if self.id_nota_em_edicao is None:
-            # Adiciona a nota na pasta atual
-            novo_id = self.db.add_note(titulo, conteudo, self.pasta_atual_id)
-            if novo_id:
-                self.id_nota_em_edicao = novo_id
-                # Atualiza o widget de anexos com o novo ID da nota
-                self.attachment_editor.set_note_id(novo_id)
-        else:
-            self.db.update_note(self.id_nota_em_edicao, titulo, conteudo)
-        
-        self.carregar_notas_da_pasta(self.pasta_atual_id)
-        self.sair_modo_edicao()
+def main():
+    """Main application entry point."""
+    # Set up exception hook
+    sys.excepthook = exception_hook
     
-    def deletar_nota_selecionada(self):
-        item_selecionado = self.lista_de_notas.currentItem()
-        if item_selecionado is None:
-            return
-        
-        titulo_nota = item_selecionado.text()
-        caixa_confirmacao = QMessageBox()
-        caixa_confirmacao.setText(f'Tem certeza que deseja deletar a nota "{titulo_nota}"?')
-        caixa_confirmacao.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        caixa_confirmacao.setIcon(QMessageBox.Icon.Warning)
-        caixa_confirmacao.setDefaultButton(QMessageBox.StandardButton.No)
-        
-        if caixa_confirmacao.exec() == QMessageBox.StandardButton.Yes:
-            id_da_nota = item_selecionado.data(Qt.ItemDataRole.UserRole)
-            self.db.delete_note(id_da_nota)
-            self.carregar_notas_da_pasta(self.pasta_atual_id)
-            # Atualiza o contador de notas na árvore de pastas
-            self.folder_tree.refresh()
-
-    # --- MÉTODOS DO CALENDÁRIO ---
-    def destacar_datas_com_eventos(self):
-        datas_com_eventos = self.db.get_all_event_dates()
-        formato_vazio = QTextCharFormat()
-        
-        # Limpa formatação antiga para o mês atual
-        ano, mes = self.calendario.yearShown(), self.calendario.monthShown()
-        for dia in range(1, 32):
-            self.calendario.setDateTextFormat(QDate(ano, mes, dia), formato_vazio)
-            
-        formato_destaque = QTextCharFormat()
-        formato_destaque.setFontWeight(QFont.Weight.Bold)
-        formato_destaque.setForeground(QColor("pink"))
-        
-        for data_str in datas_com_eventos:
-            data = QDate.fromString(data_str, "yyyy-MM-dd")
-            self.calendario.setDateTextFormat(data, formato_destaque)
-
-    def atualizar_lista_de_eventos(self):
-        self.lista_de_eventos.clear()
-        self.botao_delete_evento.setVisible(False)
-        data_selecionada = self.calendario.selectedDate().toString("yyyy-MM-dd")
-        eventos = self.db.get_events_for_date(data_selecionada)
-        for evento_id, evento_titulo in eventos:
-            item = QListWidgetItem(evento_titulo)
-            item.setData(Qt.ItemDataRole.UserRole, evento_id)
-            self.lista_de_eventos.addItem(item)
-    
-    def atualizar_estado_botao_delete_evento(self, current_item, previous_item=None):
-        self.botao_delete_evento.setVisible(current_item is not None)
-
-    def adicionar_novo_evento(self):
-        data_selecionada = self.calendario.selectedDate()
-        texto_evento, ok = QInputDialog.getText(self, "Novo Evento", f"Adicionar evento para {data_selecionada.toString('dd/MM/yyyy')}:")
-        
-        if ok and texto_evento:
-            data_str = data_selecionada.toString("yyyy-MM-dd")
-            self.db.add_event(data_str, texto_evento)
-            self.atualizar_lista_de_eventos()
-            self.destacar_datas_com_eventos()
-
-    def deletar_evento_selecionado(self):
-        item_selecionado = self.lista_de_eventos.currentItem()
-        if item_selecionado is None:
-            return
-        
-        titulo_evento = item_selecionado.text()
-        caixa_confirmacao = QMessageBox()
-        caixa_confirmacao.setText(f'Tem certeza que deseja deletar o evento "{titulo_evento}"?')
-        caixa_confirmacao.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        caixa_confirmacao.setIcon(QMessageBox.Icon.Warning)
-        caixa_confirmacao.setDefaultButton(QMessageBox.StandardButton.No)
-        
-        if caixa_confirmacao.exec() == QMessageBox.StandardButton.Yes:
-            id_do_evento = item_selecionado.data(Qt.ItemDataRole.UserRole)
-            self.db.delete_event(id_do_evento)
-            self.atualizar_lista_de_eventos()
-            self.destacar_datas_com_eventos()
-
-    # --- MÉTODO DE FECHAMENTO ---
-    def closeEvent(self, event):
-        self.db.close()
-        event.accept()
-
-
-if __name__ == "__main__":
+    # Create application
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     
-    try:
-        with open("assets/style.qss", "r") as f:
-            app.setStyleSheet(f.read())
-    except FileNotFoundError:
-        print("Arquivo de estilo 'assets/style.qss' não encontrado.")
-        
+    # Load application stylesheet
+    style_file = QFile(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'style.qss'))
+    if style_file.exists():
+        style_file.open(QFile.ReadOnly | QFile.Text)
+        stream = QTextStream(style_file)
+        app.setStyleSheet(stream.readAll())
+        style_file.close()
+    
+    # Create main window
     window = MainWindow()
     window.show()
-    sys.exit(app.exec())
+    
+    # Run application
+    return app.exec_()
+
+if __name__ == "__main__":
+    sys.exit(main())

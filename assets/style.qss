@@ -86,25 +86,46 @@ QTextEdit {
 /* Estilo para as abas */
 QTabBar::tab {
     background-color: #2E2E2E;
-    color: white;
-    padding: 10px;
-    font-size: 14px;
+    color: #FFFFFF; /* Branco puro para melhor contraste */
+    padding: 10px 25px; /* Aumentado o padding horizontal para 25px para garantir espaço suficiente */
+    margin-right: 5px; /* Adicionado margem à direita para separar as abas */
+    font-size: 15px; /* Aumentado o tamanho da fonte */
+    letter-spacing: 0.5px; /* Espaçamento entre letras para melhor legibilidade */
     border: none;
     border-bottom: 2px solid #2E2E2E; /* Borda inferior da cor do fundo */
+    border-radius: 4px 4px 0 0; /* Arredondamento nos cantos superiores */
+    min-width: 100px; /* Largura mínima para garantir que o texto não seja cortado */
 }
 
 QTabBar::tab:hover {
     background-color: #3C3C3C;
+    color: #E91E63; /* Cor rosa ao passar o mouse para melhor feedback visual */
 }
 
 QTabBar::tab:selected {
     color: #E91E63;
     font-weight: bold;
-    border-bottom: 2px solid #E91E63; /* Borda rosa na aba selecionada */
+    font-size: 16px; /* Tamanho ligeiramente maior para a aba selecionada */
+    border-bottom: 3px solid #E91E63; /* Borda rosa mais grossa na aba selecionada */
+    background-color: #383838; /* Fundo ligeiramente mais claro para destacar */
+    border-top: 1px solid #555555; /* Borda superior sutil para dar profundidade */
+    border-left: 1px solid #555555; /* Borda esquerda sutil para dar profundidade */
+    border-right: 1px solid #555555; /* Borda direita sutil para dar profundidade */
+    min-width: 100px; /* Largura mínima para garantir que o texto não seja cortado */
 }
 
 QTabWidget::pane {
   border: none; /* Remove a borda ao redor do conteúdo da aba */
+  margin-top: 5px; /* Adiciona um pequeno espaço entre as abas e o conteúdo */
+}
+
+QTabBar {
+  qproperty-drawBase: 0; /* Remove a linha base do QTabBar */
+}
+
+/* Aumenta o espaçamento entre o ícone e o texto nas abas, se houver ícones */
+QTabBar::tab:!selected {
+  margin-top: 2px; /* Abas não selecionadas ficam ligeiramente abaixo */
 }
 
 /* Estilos para a árvore de pastas */
@@ -172,4 +193,32 @@ QLabel#breadcrumbSeparator {
 QSplitter::handle {
     background-color: #444444;
     width: 1px;
+}
+
+/* Estilo para o componente de calendário */
+QCalendarWidget {
+    background-color: #3C3C3C;
+    color: #FFFFFF;
+    min-height: 300px;
+    max-height: 300px; /* Altura máxima fixa para o calendário */
+}
+
+/* Estilo para a área de eventos do dia no calendário */
+QScrollArea#dayEventsScrollArea {
+    background-color: #3C3C3C;
+    border: none;
+    border-radius: 5px;
+    min-height: 150px;
+}
+
+/* Estilo para o widget que contém os eventos do dia */
+QWidget#dayEventsWidget {
+    background-color: #3C3C3C;
+    padding: 5px;
+}
+
+/* Estilo para o layout de eventos do dia */
+QVBoxLayout#dayEventsLayout {
+    margin: 0;
+    padding: 0;
 }

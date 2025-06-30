@@ -1,9 +1,14 @@
 # Ambiente Virtual do Python
 venv/
+env/
+.venv/
+.env/
 
 # Arquivos de cache do Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
 
 # Banco de Dados SQLite
 *.db
@@ -11,3 +16,30 @@ __pycache__/
 
 # Diretório de anexos
 attachments/
+
+# Arquivos de log
+logs/
+*.log
+
+# Arquivos de configuração local
+.env
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos de distribuição
+dist/
+build/
+*.egg-info/
+
+# Arquivos temporários
+*.tmp
+*.bak
+*.backup
