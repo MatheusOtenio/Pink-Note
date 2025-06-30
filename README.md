@@ -3,6 +3,7 @@
 
 ![Status](https://img.shields.io/badge/status-em%20desenvolvimento-yellowgreen)
 
+
 ### 📸 Visão Geral do Projeto
 
 [Insira um screenshot da aplicação aqui]
