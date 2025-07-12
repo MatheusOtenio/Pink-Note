@@ -6,9 +6,10 @@
 
 PinkNote é um aplicativo de desktop desenvolvido em Python com o objetivo de centralizar a vida acadêmica de um estudante. Ele oferece uma interface intuitiva para a gestão de anotações e um calendário para o acompanhamento de datas e eventos importantes. O projeto foi construído com uma arquitetura em camadas (Clean Architecture) e um design de interface moderno, focado na usabilidade.
 
-<img src="img/1.png" alt="Imagem 1" width="300"/>
-<img src="img/2.png" alt="Imagem 2" width="300"/>
-
+<div style="display: flex; gap: 10px;">
+  <img src="img/1.png" alt="Imagem 1" width="400"/>
+  <img src="img/2.png" alt="Imagem 2" width="400"/>
+</div>
 
 ## 🏗️ Arquitetura
 
